@@ -114,6 +114,7 @@ static u32 ir_gpio_hdle;
 #define IR_REPEAT_CODE	(0x00000000)
 #define DRV_VERSION	"1.00"
 
+#define IR_KEY_CODE(c)  ((int)(c>>17)&0x7f)
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 struct sunxi_ir_data {
@@ -418,7 +419,16 @@ static unsigned long ir_packet_handler(unsigned char *buf, unsigned long dcnt)
 
 static int ir_code_valid(unsigned long code)
 {
+	int odd;
+	for (odd = 0; code; odd += (code & 0x01))
+		code >>= 1;
+
+	//printk("IR RAW CODE : %lu (%d, %s)", code, odd, (odd & 1) ? "odd" : "even");
+	return odd & 1;
+#if 0
 	unsigned long tmp1, tmp2;
+
+return code != (unsigned long)-1;
 
 #ifdef IR_CHECK_ADDR_CODE
 	/* Check Address Value */
@@ -436,6 +446,7 @@ static int ir_code_valid(unsigned long code)
 
 	return (((tmp1 ^ tmp2) & 0x00ff0000) == 0x00ff0000);
 #endif /* IR_CHECK_ADDR_CODE */
+#endif
 }
 
 static irqreturn_t ir_irq_service(int irqno, void *dev_id)
@@ -481,7 +492,7 @@ static irqreturn_t ir_irq_service(int irqno, void *dev_id)
 		if (timer_used) {
 			if (code_valid) { /* the pre-key is released */
 #ifdef CONFIG_ARCH_SUN5I
-				input_report_key(ir_dev, ir_keycodes[(ir_code >> 16) & 0xff], 0);
+				input_report_key(ir_dev, IR_KEY_CODE(ir_code), 0);
 				input_sync(ir_dev);
 #endif
 #ifdef DEBUG_IR_LEVEL1
@@ -505,15 +516,15 @@ static irqreturn_t ir_irq_service(int irqno, void *dev_id)
 				if (code_valid)
 					ir_code = code; /* update saved code with a new valid code */
 #ifdef DEBUG_IR_LEVEL0
-				printk("IR RAW CODE : %lu\n", (ir_code >> 16) & 0xff);
+				printk("IR RAW CODE : %lu\n", ir_code);
 #endif
-				input_report_key(ir_dev, ir_keycodes[(ir_code >> 16) & 0xff], 1);
+				input_report_key(ir_dev, IR_KEY_CODE(ir_code), 1);
 #ifdef DEBUG_IR_LEVEL0
-				printk("IR CODE : %d\n", ir_keycodes[(ir_code >> 16) & 0xff]);
+				printk("IR CODE : %d\n", IR_KEY_CODE((ir_code));
 #endif
 				input_sync(ir_dev);
 #ifdef DEBUG_IR_LEVEL1
-				printk("IR KEY VALE %d\n", ir_keycodes[(ir_code >> 16) & 0xff]);
+				printk("IR KEY VALUE %d\n", IR_KEY_CODE(ir_code));
 #endif
 			}
 		}
@@ -537,7 +548,7 @@ static void ir_timer_handle(unsigned long arg)
 	del_timer(s_timer);
 	timer_used = 0;
 	/* Time Out, means that the key is up */
-	input_report_key(ir_dev, ir_keycodes[(ir_code >> 16) & 0xff], 0);
+	input_report_key(ir_dev, IR_KEY_CODE(ir_code), 0);
 	input_sync(ir_dev);
 #ifdef DEBUG_IR_LEVEL1
 	printk("IR KEY TIMER OUT UP\n");
